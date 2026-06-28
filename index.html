@@ -86,9 +86,11 @@
   /* ── 툴바 ── */
   .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
   .seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--radius-sm);overflow:hidden}
-  .seg button{border:none;background:none;color:var(--dim);font-size:12px;padding:6px 12px}
+  .seg button{border:none;background:none;color:var(--dim);font-size:12px;padding:6px 11px;display:inline-flex;align-items:center;gap:6px}
   .seg button+button{border-left:1px solid var(--line2)}
-  .seg button.on{background:var(--accent);color:#fff;font-weight:650}
+  .seg button.on{background:var(--oc,var(--accent));color:#fff;font-weight:650}
+  .fdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .tlabel{font-size:11px;color:var(--dim2);white-space:nowrap}
   .search{flex:1;min-width:160px;max-width:320px;background:var(--panel);border:1px solid var(--line2);
     border-radius:var(--radius-sm);color:var(--txt);padding:7px 11px;font-size:12.5px;font-family:inherit}
   .search:focus{outline:none;border-color:var(--accent)}
@@ -111,6 +113,8 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 11px;
     cursor:pointer;transition:border-color .15s,background .15s,transform .06s;position:relative}
   .card:hover{border-color:var(--line2);background:#1a1e2d}
+  .card.owned{background:color-mix(in srgb,var(--oc) 7%,var(--panel));border-color:color-mix(in srgb,var(--oc) 20%,var(--line))}
+  .card.owned:hover{background:color-mix(in srgb,var(--oc) 13%,var(--panel));border-color:color-mix(in srgb,var(--oc) 38%,var(--line))}
   .card:active{transform:translateY(1px)}
   .card.dragging{opacity:.4}
   .card.insert{box-shadow:0 -2px 0 -1px var(--accent)}
@@ -124,9 +128,9 @@
   .tag{font-size:10px;color:var(--dim);background:var(--panel2);border-radius:5px;padding:1px 7px}
   .tag.hold{color:var(--warn);background:rgba(240,179,74,.1)}
   .card-foot{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
-  .owner{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--txt)}
+  .owner{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;border-radius:20px;padding:2px 9px 2px 3px}
   .owner .av{width:16px;height:16px;font-size:9px}
-  .owner.none{color:var(--dim2)}
+  .owner.none{color:var(--dim2);border:1px dashed var(--line2);padding:2px 9px}
   .meta{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim2);margin-left:auto}
   .meta span{display:inline-flex;align-items:center;gap:3px}
   .card-area{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:7px;opacity:.8;word-break:break-word}
@@ -302,8 +306,8 @@
   <a class="repo" id="hrepo" href="#" target="_blank" rel="noopener">repo ↗</a>
   <div class="legend" id="hlegend"></div>
   <div class="grow"></div>
-  <div class="me-pick unset" id="mePick" title="나는 누구인지 선택 — 활동/코멘트 작성자로 기록됩니다">
-    <span>나</span><select id="meSel"></select>
+  <div class="me-pick unset" id="mePick" title="작성자(나) 선택 — 활동·코멘트에 내 이름으로 기록됩니다. (카드 필터 아님 — 필터는 아래 '담당 필터')">
+    <span>👤 작성자</span><select id="meSel"></select>
   </div>
   <button class="btn icon bell" id="btnBell" title="최근 활동">🔔<span class="dotN" id="bellN" style="display:none">0</span></button>
   <span class="conn local" id="connChip">⚪ 로컬</span>
@@ -324,11 +328,8 @@
 <main>
   <section class="view on" id="view-board">
     <div class="toolbar">
-      <div class="seg" id="ownerFilter">
-        <button data-o="all" class="on">전체</button>
-        <button data-o="psy">psy</button>
-        <button data-o="luapapa">루아파파</button>
-      </div>
+      <span class="tlabel">담당 필터</span>
+      <div class="seg" id="ownerFilter"></div>
       <input class="search" id="search" placeholder="🔍 카드 검색 (제목·내용·영역·태그)">
       <div class="grow"></div>
       <button class="btn" id="btnAddCard">＋ 카드</button>
@@ -517,6 +518,7 @@ function renderAll(){
   $("#hlegend").innerHTML = state.meta.members.map(m =>
     `<span class="who"><span class="av" style="background:${esc(m.color)}">${esc(m.name[0])}</span>${esc(m.name)} · <span style="color:var(--dim2)">${esc(m.role)}</span></span>`).join("");
   renderMeSel();
+  renderFilter();
   renderBoard();
   renderProgress();
   renderHistory();
@@ -527,6 +529,13 @@ function renderMeSel(){
   sel.innerHTML = `<option value="">선택</option>` + state.meta.members.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
   sel.value = cfg.me || "";
   $("#mePick").classList.toggle("unset", !cfg.me);
+}
+// 담당 필터 — 멤버 색상으로 구분(정체성 '나 선택'과 별개)
+function renderFilter(){
+  const el = $("#ownerFilter");
+  const items = [{ o:"all", label:"전체", color:null }, ...state.meta.members.map(m=>({ o:m.id, label:m.name, color:m.color }))];
+  el.innerHTML = items.map(b=>`<button data-o="${esc(b.o)}" class="${filterOwner===b.o?"on":""}"${b.color?` style="--oc:${esc(b.color)}"`:""}>${b.color?`<span class="fdot" style="background:${esc(b.color)}"></span>`:""}${esc(b.label)}</button>`).join("");
+  el.querySelectorAll("button").forEach(btn=> btn.onclick=()=>{ filterOwner=btn.dataset.o; renderFilter(); renderBoard(); });
 }
 
 // ── 칸반 ─────────────────────────────────────────────────────────────────────
@@ -558,12 +567,14 @@ function renderBoard(){
 function cardHtml(c){
   const m = member(c.owner);
   const ck = (c.checklist||[]); const ckDone = ck.filter(i=>i.done).length;
-  const ownerHtml = m ? `<span class="owner"><span class="av" style="background:${esc(m.color)}">${esc(m.name[0])}</span>${esc(m.name)}</span>`
+  const oc = m ? m.color : null;
+  const ownAttr = oc ? ` class="card owned" style="--oc:${esc(oc)}"` : ` class="card"`;
+  const ownerHtml = m ? `<span class="owner" style="background:${esc(oc)}26;color:${esc(oc)}"><span class="av" style="background:${esc(oc)}">${esc(m.name[0])}</span>${esc(m.name)}</span>`
                       : `<span class="owner none">담당 미정</span>`;
   const metaBits = [];
   if((c.comments||[]).length) metaBits.push(`<span title="코멘트">💬 ${c.comments.length}</span>`);
   if(ck.length) metaBits.push(`<span title="체크리스트">☑ ${ckDone}/${ck.length}</span>`);
-  return `<div class="card" draggable="true" data-card="${esc(c.id)}">
+  return `<div${ownAttr} draggable="true" data-card="${esc(c.id)}">
     <div class="card-head">
       ${c.priority?`<span class="pchip ${esc(c.priority)}">${esc(c.priority)}</span>`:""}
       <span class="card-title">${esc(c.title)}</span>
@@ -936,8 +947,7 @@ function bindUI(){
   $("#k-ok").onclick=saveDec; $("#k-cancel").onclick=closeModals; $("#k-delete").onclick=deleteDec;
   $("#g-save").onclick=saveCfgModal; $("#g-cancel").onclick=closeModals; $("#g-clear").onclick=clearCfg;
   $$(".mbg").forEach(bg=> bg.onclick=e=>{ if(e.target===bg) closeModals(); });
-  // 필터
-  $$("#ownerFilter button").forEach(b=> b.onclick=()=>{ $$("#ownerFilter button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); filterOwner=b.dataset.o; renderBoard(); });
+  // 필터(담당) 버튼은 renderFilter()에서 동적 배선. 여기선 검색만.
   $("#search").oninput=e=>{ searchText=e.target.value.trim().toLowerCase(); renderBoard(); };
   document.addEventListener("keydown", e=>{
     if((e.ctrlKey||e.metaKey)&&e.key==="s"){ e.preventDefault(); saveFile(); }
