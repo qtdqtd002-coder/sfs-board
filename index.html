@@ -194,7 +194,7 @@
       <button id="btnCopy" class="ghost" title="board-data.js 내용 복사 (백업)">📋</button>
     </div>
     <div class="spacer"></div>
-    <span class="dirty" id="dirty"><span class="pdot"></span> 저장 안 됨 — 잊지 말고 저장 + git push</span>
+    <span class="dirty" id="dirty"><span class="pdot"></span> <span id="dirtyTxt">저장 안 됨</span></span>
     <span class="saved" id="savedTag">✔ 저장됨</span>
     <span id="updated" style="font-size:11px;color:var(--dim2)"></span>
   </div>
@@ -291,6 +291,7 @@
       <div class="fld"><label>데이터 경로</label><input id="g-path" placeholder="planning/board/board-data.js"></div>
       <div class="fld"><label>branch</label><input id="g-branch" placeholder="main"></div>
     </div>
+    <div class="fld"><label class="chk-row"><input type="checkbox" id="g-autosave"> 자동 저장 (편집 후 잠시 멈추면 자동 커밋 — 깜빡해도 동기화 안 놓침)</label></div>
     <div class="fld"><label class="chk-row"><input type="checkbox" id="g-poll"> 상대 변경 자동 감지·반영 (20초마다 폴링)</label></div>
     <div class="modal-foot">
       <button class="del" id="g-clear" title="토큰 삭제·로컬 모드로">연결 끊기</button>
@@ -329,7 +330,7 @@ let editingCardId = null, editingDecId = null, dragId = null;
 // GitHub 라이브 모드 상태
 const LS_CFG = "sfs_board_cfg_v1";
 const GH_API = "https://api.github.com";
-let cfg = {}, apiMode = false, remoteSha = null, pollTimer = null;
+let cfg = {}, apiMode = false, remoteSha = null, pollTimer = null, autosaveTimer = null, saving = false;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
@@ -745,8 +746,11 @@ async function copyFile(){
 function loadCfg(){
   let c = {};
   try{ c = JSON.parse(localStorage.getItem(LS_CFG) || "{}"); }catch(e){}
-  return Object.assign({ token:"", owner:"luapapa0613", repo:"project_2",
-    path:"planning/board/board-data.js", branch:"main", poll:true, pollSec:20 }, c);
+  const m = Object.assign({ token:"", owner:"luapapa0613", repo:"project_2",
+    path:"planning/board/board-data.js", branch:"board-data", poll:true, pollSec:20,
+    autosave:true, autosaveSec:2.5 }, c);
+  if(m.branch === "main") m.branch = "board-data";  // 옛 기본값 이전: 보드 데이터 커밋은 전용 브랜치(main 비오염)
+  return m;
 }
 function persistCfg(){ localStorage.setItem(LS_CFG, JSON.stringify(cfg)); }
 function apiHeaders(){ return { "Authorization":"Bearer "+cfg.token, "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28" }; }
@@ -771,8 +775,8 @@ function updateConnChip(){
   const chip = $("#connChip");
   if(apiMode){
     chip.className = "conn live";
-    chip.textContent = `🟢 라이브 · ${cfg.owner}/${cfg.repo}`;
-    $("#btnSave").textContent = "💾 저장→커밋";
+    chip.textContent = `🟢 라이브${cfg.autosave ? "·자동저장" : ""} · ${cfg.owner}/${cfg.repo}@${cfg.branch}`;
+    $("#btnSave").textContent = "💾 저장";
     $("#btnConnect").style.display = "none";   // 라이브에선 로컬 파일 연결 숨김(혼선 방지)
   } else {
     chip.className = "conn local";
@@ -803,13 +807,15 @@ async function loadFromApi(silent){
 }
 
 async function saveToApi(){
-  if(!apiMode) return;
+  if(!apiMode || saving) return;
+  saving = true;
+  if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
   try{
     if(remoteSha === null){                         // sha 미확보 시 먼저 조회(충돌 감지용)
       const r = await fetch(getUrl(), { headers: apiHeaders(), cache:"no-store" });
       if(r.ok){ remoteSha = (await r.json()).sha; }
     }
-    const body = { message:`board: web 편집 (${todayStr()})`, content:b64encode(serialize()), sha:remoteSha, branch:cfg.branch || "main" };
+    const body = { message:`board: web 편집 (${todayStr()})`, content:b64encode(serialize()), sha:remoteSha, branch:cfg.branch || "board-data" };
     const res = await fetch(contentsUrl(), { method:"PUT", headers: apiHeaders(), body: JSON.stringify(body) });
     if(res.status === 409 || res.status === 422){    // sha 불일치 = 상대가 먼저 저장함
       toast("⚠ 상대가 먼저 저장했습니다 — 🔄로 동기화 후 다시 저장하세요(내 변경 보존됨)");
@@ -820,8 +826,9 @@ async function saveToApi(){
     const j = await res.json();
     remoteSha = j.content.sha;
     clearDirty(); updateConnChip();
-    toast("💾 저장→커밋 완료 — 상대에게 자동 반영됩니다");
+    toast("💾 저장 완료 — 상대에게 자동 반영");
   }catch(e){ connError("저장 오류: " + e.message); }
+  finally{ saving = false; }
 }
 
 function startPoll(){
@@ -853,6 +860,7 @@ function openCfg(){
   $("#g-token").value = cfg.token || "";
   $("#g-owner").value = cfg.owner; $("#g-repo").value = cfg.repo;
   $("#g-path").value = cfg.path;   $("#g-branch").value = cfg.branch;
+  $("#g-autosave").checked = !!cfg.autosave;
   $("#g-poll").checked = !!cfg.poll;
   $("#cfgModal").classList.add("on");
   setTimeout(() => $("#g-token").focus(), 30);
@@ -860,7 +868,8 @@ function openCfg(){
 function saveCfgModal(){
   cfg.token = $("#g-token").value.trim();
   cfg.owner = $("#g-owner").value.trim(); cfg.repo = $("#g-repo").value.trim();
-  cfg.path = $("#g-path").value.trim();   cfg.branch = $("#g-branch").value.trim() || "main";
+  cfg.path = $("#g-path").value.trim();   cfg.branch = $("#g-branch").value.trim() || "board-data";
+  cfg.autosave = $("#g-autosave").checked;
   cfg.poll = $("#g-poll").checked;
   persistCfg();
   apiMode = !!(cfg.token && cfg.owner && cfg.repo && cfg.path);
@@ -875,9 +884,20 @@ function clearCfg(){
   closeModals(); updateConnChip(); toast("연결 끊김 — 로컬 모드");
 }
 
-// ── dirty 상태 ──────────────────────────────────────────────────────────────
-function markDirty(){ dirty = true; $("#dirty").classList.add("on"); $("#savedTag").classList.remove("on"); }
+// ── dirty 상태 + 자동 저장(디바운스) ─────────────────────────────────────────
+function markDirty(){
+  dirty = true; $("#dirty").classList.add("on"); $("#savedTag").classList.remove("on");
+  if(apiMode && cfg.autosave){ $("#dirtyTxt").textContent = "저장 대기…"; scheduleAutoSave(); }
+  else $("#dirtyTxt").textContent = apiMode ? "저장 안 됨 — 💾 눌러 커밋" : "저장 안 됨 — 💾 후 git push";
+}
 function clearDirty(){ dirty = false; $("#dirty").classList.remove("on"); $("#savedTag").classList.add("on"); setTimeout(() => $("#savedTag").classList.remove("on"), 2500); }
+function scheduleAutoSave(){
+  if(autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async () => {
+    autosaveTimer = null;
+    if(apiMode && cfg.autosave && dirty && !saving){ $("#dirtyTxt").textContent = "저장 중…"; await saveToApi(); }
+  }, Math.max(1, cfg.autosaveSec || 2.5) * 1000);
+}
 
 // ── 유틸 ───────────────────────────────────────────────────────────────────
 function todayStr(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
