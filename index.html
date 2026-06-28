@@ -698,8 +698,7 @@ async function reloadFile(silent){
   if(dirty && !silent && !confirm("저장 안 된 변경이 있습니다. 파일 내용으로 덮어쓸까요?")) return;
   try{
     const txt = await (await fileHandle.getFile()).text();
-    const json = txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1);
-    state = JSON.parse(json);
+    state = parseBoardText(txt);
     clearDirty(); render();
     if(!silent) toast("🔄 파일에서 다시 읽음");
   }catch(e){ toast("읽기 실패: " + e.message); }
@@ -757,7 +756,16 @@ function getUrl(){ return contentsUrl() + "?ref=" + encodeURIComponent(cfg.branc
 // UTF-8 안전 base64 (한글 보존)
 function b64encode(str){ const bytes = new TextEncoder().encode(str); let bin=""; for(const b of bytes) bin += String.fromCharCode(b); return btoa(bin); }
 function b64decode(b64){ const bin = atob(b64.replace(/\s/g,"")); const bytes = Uint8Array.from(bin, c=>c.charCodeAt(0)); return new TextDecoder().decode(bytes); }
-function parseBoardText(txt){ return JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}")+1)); }
+function parseBoardText(txt){
+  // 주석 헤더에 'window.SFS_BOARD = { ...JSON... };' 예시 줄이 있어 단순 indexOf 류는 그 중괄호를 잡는다.
+  // → '//' 로 시작하는 줄(주석)을 먼저 제거하고 첫 '{' ~ 마지막 '}' 를 파싱한다.
+  //   (JSON 값 속 'https://' 의 '//' 는 줄 시작이 아니므로 보존됨)
+  const body = txt.replace(/^\s*\/\/.*$/gm, "");
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if(start < 0 || end < 0 || end < start) throw new Error("board-data.js 형식 파싱 실패");
+  return JSON.parse(body.slice(start, end + 1));
+}
 
 function updateConnChip(){
   const chip = $("#connChip");
@@ -791,7 +799,7 @@ async function loadFromApi(silent){
     clearDirty(); updateConnChip(); render();
     if(!silent) toast("🔄 GitHub에서 최신 반영");
     startPoll();
-  }catch(e){ connError("네트워크 오류: " + e.message); if(!state) showSetupScreen("네트워크 오류: " + e.message); }
+  }catch(e){ connError("로드 오류: " + e.message); if(!state) showSetupScreen("로드 오류: " + e.message); }
 }
 
 async function saveToApi(){
