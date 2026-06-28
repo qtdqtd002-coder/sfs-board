@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkillFarmSurvivor 협업 보드</title>
+<style>
+  :root{
+    --bg:#0b0d14; --bg2:#0e1018; --panel:#171a26; --panel2:#1f2334; --line:#2c3146;
+    --txt:#e7e9f0; --dim:#9aa3bd; --dim2:#5a607a;
+    --accent:#7c5cff; --accent2:#34d6c8; --ok:#46d27e; --warn:#ffb454; --danger:#ff5d6c;
+    --psy:#7c5cff; --lua:#34d6c8;
+    --mono:Consolas,'Cascadia Code',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI','Malgun Gothic',sans-serif;line-height:1.55;font-size:13.5px;padding:0 0 60px}
+
+  /* ── Header ── */
+  header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,#12141d,#0d0f17ee);
+    backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:12px 22px}
+  .hrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{font-size:18px;font-weight:800;letter-spacing:.2px}.brand span{color:var(--accent)}
+  .brandsub{font-size:11.5px;color:var(--dim);margin-top:1px}
+  .repo{font-family:var(--mono);font-size:11.5px;color:var(--accent2);text-decoration:none;border:1px solid rgba(52,214,200,.28);background:rgba(52,214,200,.06);padding:3px 9px;border-radius:7px}
+  .repo:hover{background:rgba(52,214,200,.13)}
+  .spacer{flex:1}
+  .legend{display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--dim)}
+  .who{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .savebar{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  button{font-family:inherit;font-size:12px;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--txt);padding:6px 11px;transition:.13s}
+  button:hover{border-color:var(--accent);background:#272c40}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  button.primary:hover{filter:brightness(1.1)}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.4;cursor:not-allowed;border-color:var(--line);background:var(--panel2)}
+  .dirty{font-size:11.5px;color:var(--warn);display:none;align-items:center;gap:5px}
+  .dirty.on{display:inline-flex}
+  .dirty .pdot{width:8px;height:8px;border-radius:50%;background:var(--warn);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .saved{font-size:11.5px;color:var(--ok);display:none}.saved.on{display:inline}
+  .conn{font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 11px;border:1px solid var(--line);white-space:nowrap}
+  .conn.live{background:rgba(70,210,126,.14);color:var(--ok);border-color:rgba(70,210,126,.4)}
+  .conn.local{background:var(--panel2);color:var(--dim)}
+  .conn.err{background:rgba(255,93,108,.14);color:var(--danger);border-color:rgba(255,93,108,.4)}
+  .chk-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt)}
+  .chk-row input{width:auto}
+  .modal a.lnk{color:var(--accent2);font-size:11.5px}
+
+  /* ── Toolbar ── */
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 22px 0}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:none;border-radius:0;background:transparent;padding:6px 12px;color:var(--dim)}
+  .seg button.on{background:var(--accent);color:#fff;font-weight:700}
+  .seg button:not(:last-child){border-right:1px solid var(--line)}
+  .search{flex:1;min-width:140px;max-width:300px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:6px 11px;font-size:12.5px;font-family:inherit}
+  .search:focus{outline:none;border-color:var(--accent)}
+  .tlabel{font-size:11px;color:var(--dim2);text-transform:uppercase;letter-spacing:.5px}
+
+  main{padding:14px 22px 0}
+
+  /* ── Top cards: locks + progress ── */
+  .toprow{display:grid;grid-template-columns:1.1fr 1.4fr;gap:14px;margin-bottom:16px}
+  @media(max-width:880px){.toprow{grid-template-columns:1fr}}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 15px}
+  .box h3{margin:0 0 9px;font-size:12.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:7px}
+  .lock-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  .lock-item:last-child{border:none}
+  .lock-item:only-child,.empty{color:var(--dim);font-style:italic}
+  .lockwho{font-weight:700;white-space:nowrap}
+  .lockarea{font-family:var(--mono);font-size:11px;color:var(--accent2)}
+  .ms{margin-bottom:11px}.ms:last-child{margin-bottom:0}
+  .ms-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:4px}
+  .ms-name{font-weight:700}.ms-frac{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .bar{height:8px;background:#0c0e16;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px;transition:width .3s}
+  .ms-note{font-size:11px;color:var(--dim2);margin-top:3px}
+  .ms-items{margin:6px 0 0;padding:0;list-style:none}
+  .ms-items li{display:flex;align-items:center;gap:7px;font-size:11.5px;padding:2.5px 0;color:var(--dim);cursor:pointer}
+  .ms-items li:hover{color:var(--txt)}
+  .ms-items .chk{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--dim2);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+  .ms-items li.done .chk{background:var(--ok);border-color:var(--ok);color:#06210f}
+  .ms-items li.done{color:var(--dim2);text-decoration:line-through}
+
+  /* ── Kanban ── */
+  .kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:11px;align-items:start}
+  @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:620px){.kanban{grid-template-columns:1fr}}
+  .col{background:var(--bg2);border:1px solid var(--line);border-radius:13px;display:flex;flex-direction:column;min-height:120px}
+  .col-head{padding:11px 13px 8px;border-bottom:1px solid var(--line);position:sticky;top:0}
+  .col-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:7px}
+  .count{font-size:11px;color:var(--dim);background:var(--panel2);border-radius:20px;padding:1px 8px;font-weight:700}
+  .col-hint{font-size:10.5px;color:var(--dim2);margin-top:2px}
+  .col-body{padding:9px;display:flex;flex-direction:column;gap:9px;min-height:60px;flex:1}
+  .col.dragover{outline:2px dashed var(--accent);outline-offset:-4px}
+  .col-body.dropline{box-shadow:inset 0 3px 0 -1px var(--accent)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:10px 11px;cursor:grab;position:relative;transition:.12s}
+  .card:hover{border-color:#3a4060;transform:translateY(-1px)}
+  .card.dragging{opacity:.45}
+  .card.insert-before{box-shadow:0 -3px 0 -1px var(--accent)}
+  .card-top{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .prio{font-family:var(--mono);font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px}
+  .prio.P0{background:rgba(255,93,108,.18);color:var(--danger)}
+  .prio.P1{background:rgba(255,180,84,.18);color:var(--warn)}
+  .prio.P2{background:rgba(154,163,189,.14);color:var(--dim)}
+  .ctitle{font-size:13px;font-weight:700;line-height:1.35;flex:1}
+  .cdesc{font-size:11.5px;color:var(--dim);margin:4px 0 7px;line-height:1.45}
+  .card-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .owner{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;cursor:pointer;border:1px solid transparent;user-select:none}
+  .owner.none{color:var(--dim2);border:1px dashed var(--line)}
+  .lockbadge{font-size:10px;color:var(--warn);background:rgba(255,180,84,.12);border:1px solid rgba(255,180,84,.3);border-radius:6px;padding:1px 7px;display:inline-flex;align-items:center;gap:3px;cursor:pointer}
+  .lockbadge.off{color:var(--dim2);background:transparent;border:1px solid var(--line)}
+  .area{font-family:var(--mono);font-size:10px;color:var(--accent2);width:100%;margin-top:5px;opacity:.85;word-break:break-word}
+  .tag{font-size:10px;color:var(--dim);background:var(--panel2);border-radius:5px;padding:1px 6px}
+  .tag.hold{color:var(--warn);background:rgba(255,180,84,.1)}
+  .src{font-size:9.5px;color:var(--dim2);font-family:var(--mono);margin-top:4px;width:100%}
+  .card .edit{position:absolute;top:7px;right:7px;opacity:0;font-size:11px;padding:2px 7px;border-radius:6px}
+  .card:hover .edit{opacity:1}
+  .add-card{margin:2px;border:1px dashed var(--line);background:transparent;color:var(--dim);border-radius:9px;padding:7px;font-size:12px}
+  .add-card:hover{border-color:var(--accent);color:var(--txt)}
+
+  /* ── Decisions ── */
+  .sec-title{font-size:15px;font-weight:800;margin:22px 0 4px;display:flex;align-items:center;gap:9px}
+  .sec-sub{font-size:11.5px;color:var(--dim);margin-bottom:10px}
+  .dlist{display:flex;flex-direction:column;gap:9px}
+  .dcard{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:11px 13px;position:relative}
+  .dcard.open{border-left-color:var(--warn)}
+  .dcard.promoted{border-left-color:var(--ok)}
+  .dcard.hold{border-left-color:var(--danger)}
+  .dq{font-size:13px;font-weight:700;margin-bottom:5px;padding-right:70px}
+  .dmeta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim);align-items:center}
+  .dstatus{font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 9px}
+  .st-open{background:rgba(255,180,84,.16);color:var(--warn)}
+  .st-checking{background:rgba(124,92,255,.18);color:#b9a9ff}
+  .st-answered{background:rgba(70,210,126,.16);color:var(--ok)}
+  .st-promoted{background:rgba(70,210,126,.16);color:var(--ok)}
+  .st-hold{background:rgba(255,93,108,.16);color:var(--danger)}
+  .dnote{font-size:11.5px;color:var(--dim);margin-top:6px;background:var(--panel2);border-radius:7px;padding:7px 10px;line-height:1.5}
+  .arrow{color:var(--dim2)}
+  .dcard .edit{position:absolute;top:9px;right:11px;opacity:.6}
+  .dcard:hover .edit{opacity:1}
+
+  /* ── Docs ── */
+  .docs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .docs a{text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px;display:flex;flex-direction:column;min-width:150px;transition:.12s}
+  .docs a:hover{border-color:var(--accent);background:var(--panel2)}
+  .docs .dl{font-size:12.5px;font-weight:700;color:var(--txt)}
+  .docs .dn{font-size:10.5px;color:var(--dim);margin-top:1px}
+
+  /* ── Modal ── */
+  .modal-bg{position:fixed;inset:0;background:#000a;backdrop-filter:blur(3px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow:auto}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:15px;width:100%;max-width:560px;padding:20px 22px;box-shadow:0 20px 60px #000a}
+  .modal h2{margin:0 0 14px;font-size:17px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  .fld input,.fld textarea,.fld select{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;font-family:inherit}
+  .fld textarea{min-height:64px;resize:vertical;line-height:1.5}
+  .fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--accent)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal-foot{display:flex;gap:9px;justify-content:flex-end;margin-top:16px;align-items:center}
+  .modal-foot .del{margin-right:auto;color:var(--danger);border-color:rgba(255,93,108,.4)}
+  .modal-foot .del:hover{background:rgba(255,93,108,.13)}
+  .hint{font-size:11px;color:var(--dim2);margin-top:5px}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);color:var(--txt);padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:.25s;pointer-events:none;box-shadow:0 8px 30px #0008}
+  .toast.on{opacity:1;bottom:30px}
+  .fatal{margin:40px auto;max-width:600px;background:var(--panel);border:1px solid var(--danger);border-radius:12px;padding:20px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div>
+      <div class="brand">Skill<span>Farm</span>Survivor · 협업 보드</div>
+      <div class="brandsub" id="hsub">psy ↔ 루아파파 진행 동기화</div>
+    </div>
+    <a class="repo" id="hrepo" href="#" target="_blank" rel="noopener">repo ↗</a>
+    <div class="spacer"></div>
+    <div class="legend" id="hlegend"></div>
+  </div>
+  <div class="hrow" style="margin-top:9px">
+    <div class="savebar">
+      <span class="conn local" id="connChip">⚪ 로컬</span>
+      <button class="primary" id="btnSave" title="저장 (Ctrl+S)">💾 저장</button>
+      <button id="btnSettings" title="GitHub 라이브 연결(공유) 설정">⚙ 라이브 연결</button>
+      <button id="btnConnect" class="ghost" title="로컬 board-data.js 파일 연결 (오프라인용)">📁 파일</button>
+      <button id="btnReload" class="ghost" title="다시 읽기">🔄</button>
+      <button id="btnDownload" class="ghost" title="board-data.js 내려받기 (백업)">⬇</button>
+      <button id="btnCopy" class="ghost" title="board-data.js 내용 복사 (백업)">📋</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="dirty" id="dirty"><span class="pdot"></span> 저장 안 됨 — 잊지 말고 저장 + git push</span>
+    <span class="saved" id="savedTag">✔ 저장됨</span>
+    <span id="updated" style="font-size:11px;color:var(--dim2)"></span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <span class="tlabel">보기</span>
+  <div class="seg" id="ownerFilter">
+    <button data-o="all" class="on">전체</button>
+    <button data-o="psy">psy</button>
+    <button data-o="luapapa">루아파파</button>
+  </div>
+  <input class="search" id="search" placeholder="🔍 카드 검색 (제목·내용·영역·태그)">
+  <div class="spacer"></div>
+  <button id="btnAddCard" class="ghost">＋ 카드 추가</button>
+</div>
+
+<main id="app"><!-- rendered --></main>
+
+<!-- 카드 편집 모달 -->
+<div class="modal-bg" id="cardModal">
+  <div class="modal">
+    <h2 id="cardModalTitle">카드 편집</h2>
+    <div class="fld"><label>제목</label><input id="f-title" placeholder="작업 제목"></div>
+    <div class="fld"><label>설명</label><textarea id="f-desc" placeholder="무엇을·왜·범위"></textarea></div>
+    <div class="frow">
+      <div class="fld"><label>칼럼</label><select id="f-column"></select></div>
+      <div class="fld"><label>담당자</label><select id="f-owner"></select></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>우선순위</label><select id="f-prio">
+        <option value="">—</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option>
+      </select></div>
+      <div class="fld"><label>영역 락 (충돌방지)</label><select id="f-lock">
+        <option value="false">잠금 없음</option><option value="true">🔒 이 영역 작업 중</option>
+      </select></div>
+    </div>
+    <div class="fld"><label>작업 영역 (파일·시스템)</label><input id="f-area" placeholder="예: project/scripts/ui (ShelterPage)"></div>
+    <div class="frow">
+      <div class="fld"><label>태그 (쉼표구분)</label><input id="f-tags" placeholder="구현, UI"></div>
+      <div class="fld"><label>출처/근거</label><input id="f-source" placeholder="예: current-task.md"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="del" id="f-delete">삭제</button>
+      <button class="ghost" id="f-cancel">취소</button>
+      <button class="primary" id="f-ok">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 결정 편집 모달 -->
+<div class="modal-bg" id="decModal">
+  <div class="modal">
+    <h2 id="decModalTitle">결정·논의 항목</h2>
+    <div class="fld"><label>질문 / 논의</label><textarea id="d-q" placeholder="정해줘야 진행되는 지점"></textarea></div>
+    <div class="frow">
+      <div class="fld"><label>올린 사람</label><select id="d-asker"></select></div>
+      <div class="fld"><label>기다리는 사람</label><select id="d-waiting"></select></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>상태</label><select id="d-status">
+        <option value="open">⬜ 질문(대기)</option>
+        <option value="checking">🔵 확인 중</option>
+        <option value="answered">✅ 답변</option>
+        <option value="promoted">⤴ 승격(확정)</option>
+        <option value="hold">🛑 보류(멈춤)</option>
+      </select></div>
+      <div class="fld"><label>날짜</label><input id="d-date" placeholder="2026-06-28"></div>
+    </div>
+    <div class="fld"><label>답/메모</label><textarea id="d-note" placeholder="PD 답, 근거, 임시 가정"></textarea></div>
+    <div class="modal-foot">
+      <button class="del" id="d-delete">삭제</button>
+      <button class="ghost" id="d-cancel">취소</button>
+      <button class="primary" id="d-ok">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- GitHub 라이브 연결 설정 모달 -->
+<div class="modal-bg" id="cfgModal">
+  <div class="modal">
+    <h2>🔗 GitHub 라이브 연결</h2>
+    <p class="hint" style="margin:-6px 0 14px">토큰으로 private repo의 board-data.js를 <b>직접 읽고/쓰기</b> → 양쪽이 항상 같은 보드를 봅니다(수동 pull/push 불필요). 토큰은 <b>이 브라우저에만</b> 저장되고 서버로 가지 않습니다.</p>
+    <div class="fld">
+      <label>GitHub 토큰 (classic · scope <code>repo</code>)</label>
+      <input id="g-token" type="password" placeholder="ghp_... (비우면 로컬 모드)" autocomplete="off">
+      <div class="hint">발급: GitHub → Settings → Developer settings → Personal access tokens → <b>Tokens (classic)</b> → <code>repo</code> 체크. <a class="lnk" href="https://github.com/settings/tokens/new?scopes=repo&description=SFS%20board" target="_blank" rel="noopener">토큰 발급 페이지 ↗</a></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>owner</label><input id="g-owner" placeholder="luapapa0613"></div>
+      <div class="fld"><label>repo</label><input id="g-repo" placeholder="project_2"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>데이터 경로</label><input id="g-path" placeholder="planning/board/board-data.js"></div>
+      <div class="fld"><label>branch</label><input id="g-branch" placeholder="main"></div>
+    </div>
+    <div class="fld"><label class="chk-row"><input type="checkbox" id="g-poll"> 상대 변경 자동 감지·반영 (20초마다 폴링)</label></div>
+    <div class="modal-foot">
+      <button class="del" id="g-clear" title="토큰 삭제·로컬 모드로">연결 끊기</button>
+      <button class="ghost" id="g-cancel">취소</button>
+      <button class="primary" id="g-save">연결 저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="board-data.js"></script>
+<script>
+"use strict";
+// ============================================================================
+//  SkillFarmSurvivor 협업 보드 — 뷰/에디터
+//  데이터 단일 소스 = board-data.js (window.SFS_BOARD). 저장 = 그 파일에 되쓰기.
+// ============================================================================
+
+const FILE_NAME = "board-data.js";
+const FILE_HEADER =
+`// ============================================================================
+// SkillFarmSurvivor 협업 보드 — 데이터 단일 소스 (Single Source of Truth)
+// ----------------------------------------------------------------------------
+//  - 이 파일이 보드의 유일한 진실 소스다. board.html 은 이 파일을 그릴 뿐이다.
+//  - 사람이 손으로 고쳐도 되고(순수 JSON), board.html 에서 편집 후 저장해도 된다.
+//  - 수정 후에는 반드시 git add/commit/push 로 상대에게 동기화한다. (README 참고)
+//  - 형식: window.SFS_BOARD = { ...JSON... };  (앞/뒤 한 줄만 비-JSON)
+// ============================================================================
+window.SFS_BOARD = `;
+
+let state, fileHandle = null, dirty = false;
+let filterOwner = "all", searchText = "";
+let editingCardId = null, editingDecId = null, dragId = null;
+
+// GitHub 라이브 모드 상태
+const LS_CFG = "sfs_board_cfg_v1";
+const GH_API = "https://api.github.com";
+let cfg = {}, apiMode = false, remoteSha = null, pollTimer = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const member = id => (state.meta.members.find(m => m.id === id)) || null;
+const STATUS_LABEL = { open:"⬜ 질문", checking:"🔵 확인 중", answered:"✅ 답변", promoted:"⤴ 승격", hold:"🛑 보류" };
+
+// ── 부팅 ───────────────────────────────────────────────────────────────────
+function boot(){
+  cfg = loadCfg();
+  apiMode = !!(cfg.token && cfg.owner && cfg.repo && cfg.path);
+  bindUI();
+  if(!window.showOpenFilePicker) $("#btnConnect").style.display = "none";
+  updateConnChip();
+  if(apiMode){ loadFromApi(true); return; }                                   // 라이브: GitHub에서 로드 → 렌더 → 폴링 시작
+  if(window.SFS_BOARD){ state = structuredClone(window.SFS_BOARD); render(); } // 로컬 파일(file://)
+  else showSetupScreen();                                                     // 호스팅인데 토큰 없음 / 데이터 파일 없음
+}
+
+function showSetupScreen(msg){
+  $("#app").innerHTML = `<div class="fatal" style="border-color:var(--accent)">
+    <h2>🔗 라이브 연결이 필요합니다</h2>
+    <p>이 보드는 GitHub <code>${esc(cfg.owner)}/${esc(cfg.repo)}</code> 의 데이터에 직접 연결해 양쪽이 항상 같은 내용을 봅니다.
+    상단 <b>⚙ 라이브 연결</b>을 눌러 GitHub 토큰을 1회 등록하세요.</p>
+    ${msg ? `<p style="color:var(--danger)">⚠ ${esc(msg)}</p>` : ""}
+    <p style="font-size:12px;color:var(--dim)">토큰은 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다.</p>
+    <button class="primary" onclick="openCfg()">⚙ 지금 연결</button></div>`;
+}
+
+// ── 렌더 ───────────────────────────────────────────────────────────────────
+function render(){
+  $("#hsub").textContent = state.meta.subtitle || "";
+  $("#hrepo").href = state.meta.repoUrl || "#";
+  $("#hrepo").textContent = (state.meta.repo || "repo") + " ↗";
+  $("#updated").textContent = "데이터 기준일 " + (state.meta.updated || "—");
+  $("#hlegend").innerHTML = state.meta.members.map(m =>
+    `<span class="who"><span class="dot" style="background:${esc(m.color)}"></span>${esc(m.name)} · <span style="color:var(--dim2)">${esc(m.role)}</span></span>`).join("");
+
+  let html = "";
+  html += `<div class="toprow">${renderLocks()}${renderProgress()}</div>`;
+  html += renderBoard();
+  html += renderDecisions();
+  html += renderDocs();
+  $("#app").innerHTML = html;
+  wireBoard();
+}
+
+// 영역 락: '진행 중' + lock=true 카드에서 자동 도출 (누가 어느 영역을 잡고 있나)
+function renderLocks(){
+  const locked = state.cards.filter(c => c.lock && c.column !== "done");
+  let items;
+  if(!locked.length){
+    items = `<div class="empty">현재 잠긴 영역 없음 — 작업 시작 시 카드에 🔒 를 켜 충돌을 예방하세요.</div>`;
+  } else {
+    items = locked.map(c => {
+      const m = member(c.owner);
+      const col = m ? m.color : "var(--dim2)";
+      return `<div class="lock-item">
+        <span class="dot" style="background:${col};margin-top:5px"></span>
+        <div>
+          <span class="lockwho" style="color:${col}">${m ? esc(m.name) : "미정"}</span>
+          <span style="color:var(--dim)"> — ${esc(c.title)}</span>
+          ${c.area ? `<div class="lockarea">${esc(c.area)}</div>` : ""}
+        </div></div>`;
+    }).join("");
+  }
+  return `<div class="box"><h3>🔒 지금 작업 중인 영역 <span style="color:var(--dim2);font-weight:400;text-transform:none;letter-spacing:0">· 동시 수정 충돌 방지</span></h3>${items}</div>`;
+}
+
+function renderProgress(){
+  const ms = (state.milestones || []).map(m => {
+    const total = m.items.length, done = m.items.filter(i => i.done).length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const items = m.items.map((it, idx) =>
+      `<li class="${it.done ? "done" : ""}" data-ms="${esc(m.id)}" data-i="${idx}">
+        <span class="chk">${it.done ? "✓" : ""}</span>${esc(it.label)}</li>`).join("");
+    return `<div class="ms">
+      <div class="ms-head"><span class="ms-name">${esc(m.name)}</span><span class="ms-frac">${done}/${total} · ${pct}%</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      ${m.note ? `<div class="ms-note">${esc(m.note)}</div>` : ""}
+      <ul class="ms-items">${items}</ul>
+    </div>`;
+  }).join("");
+  return `<div class="box"><h3>📊 데모 진행률 · 마일스톤 <span style="color:var(--dim2);font-weight:400;text-transform:none;letter-spacing:0">· 항목 클릭=완료 토글</span></h3>${ms}</div>`;
+}
+
+function matchFilter(c){
+  if(filterOwner !== "all" && c.owner !== filterOwner) return false;
+  if(searchText){
+    const hay = [c.title, c.desc, c.area, (c.tags||[]).join(" "), c.source].join(" ").toLowerCase();
+    if(!hay.includes(searchText)) return false;
+  }
+  return true;
+}
+
+function renderBoard(){
+  const cols = state.columns.map(col => {
+    const cards = state.cards.filter(c => c.column === col.id);
+    const shown = cards.filter(matchFilter);
+    const count = (filterOwner !== "all" || searchText)
+      ? `${shown.length}/${cards.length}` : `${cards.length}`;
+    const body = shown.map(renderCard).join("")
+      || `<div class="empty" style="padding:10px;font-size:11.5px">${cards.length ? "필터에 맞는 카드 없음" : "비어 있음"}</div>`;
+    return `<div class="col" data-col="${esc(col.id)}">
+      <div class="col-head">
+        <div class="col-title">${esc(col.title)}<span class="count">${count}</span></div>
+        <div class="col-hint">${esc(col.hint || "")}</div>
+      </div>
+      <div class="col-body" data-col="${esc(col.id)}">${body}
+        <button class="add-card" data-col="${esc(col.id)}">＋ 추가</button>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="kanban">${cols}</div>`;
+}
+
+function renderCard(c){
+  const m = member(c.owner);
+  const ownerHtml = m
+    ? `<span class="owner" data-owner-card="${esc(c.id)}" style="background:${esc(m.color)}22;color:${esc(m.color)};border-color:${esc(m.color)}55" title="클릭=담당자 변경">●&nbsp;${esc(m.name)}</span>`
+    : `<span class="owner none" data-owner-card="${esc(c.id)}" title="클릭=담당자 지정">담당 미정</span>`;
+  const lockHtml = c.column === "done" ? "" :
+    `<span class="lockbadge ${c.lock ? "" : "off"}" data-lock-card="${esc(c.id)}" title="영역 락 토글">${c.lock ? "🔒 잠금" : "🔓"}</span>`;
+  const tags = (c.tags || []).map(t => `<span class="tag ${/hold/i.test(t) ? "hold" : ""}">${esc(t)}</span>`).join("");
+  return `<div class="card" draggable="true" data-card="${esc(c.id)}">
+    <button class="edit ghost" data-edit-card="${esc(c.id)}">편집</button>
+    <div class="card-top">
+      ${c.priority ? `<span class="prio ${esc(c.priority)}">${esc(c.priority)}</span>` : ""}
+      <span class="ctitle">${esc(c.title)}</span>
+    </div>
+    ${c.desc ? `<div class="cdesc">${esc(c.desc)}</div>` : ""}
+    <div class="card-foot">
+      ${ownerHtml}${lockHtml}${tags}
+      ${c.area ? `<div class="area">▸ ${esc(c.area)}</div>` : ""}
+      ${c.source ? `<div class="src">출처: ${esc(c.source)}</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function renderDecisions(){
+  const items = (state.decisions || []).map(d => {
+    const ask = member(d.asker), wait = member(d.waiting);
+    return `<div class="dcard ${d.status}">
+      <button class="edit ghost" data-edit-dec="${esc(d.id)}">편집</button>
+      <div class="dq">${esc(d.q)}</div>
+      <div class="dmeta">
+        <span class="dstatus st-${esc(d.status)}">${STATUS_LABEL[d.status] || d.status}</span>
+        ${ask ? `<span>올림: <b style="color:${esc(ask.color)}">${esc(ask.name)}</b></span>` : ""}
+        <span class="arrow">→</span>
+        ${wait ? `<span>대기: <b style="color:${esc(wait.color)}">${esc(wait.name)}</b></span>` : `<span style="color:var(--dim2)">대기 미정</span>`}
+        ${d.date ? `<span style="color:var(--dim2)">· ${esc(d.date)}</span>` : ""}
+      </div>
+      ${d.note ? `<div class="dnote">${esc(d.note)}</div>` : ""}
+    </div>`;
+  }).join("") || `<div class="empty">열린 결정 항목이 없습니다.</div>`;
+  const openCount = (state.decisions || []).filter(d => d.status === "open" || d.status === "hold").length;
+  return `<div class="sec-title">⚖️ 결정·논의 대기 ${openCount ? `<span class="count" style="background:rgba(255,180,84,.16);color:var(--warn)">${openCount} 대기</span>` : ""}
+    <button class="ghost" id="btnAddDec" style="margin-left:auto;font-weight:400">＋ 항목 추가</button></div>
+    <div class="sec-sub">정해줘야 진행되는 지점 · 정본 채널 = open_questions.md ↔ confirmed_decisions.md</div>
+    <div class="dlist">${items}</div>`;
+}
+
+function renderDocs(){
+  const links = (state.docs || []).map(d =>
+    `<a href="${esc(d.href)}" target="_blank" rel="noopener"><span class="dl">${esc(d.label)}</span><span class="dn">${esc(d.note || "")}</span></a>`).join("");
+  return `<div class="sec-title">📁 문서 바로가기</div>
+    <div class="sec-sub">정본·조율 문서로 한 번에 이동 (로컬 파일은 브라우저 설정에 따라 열림)</div>
+    <div class="docs">${links}</div>`;
+}
+
+// ── 보드 상호작용 배선 (매 렌더 후) ─────────────────────────────────────────
+function wireBoard(){
+  // 카드 편집
+  document.querySelectorAll("[data-edit-card]").forEach(b =>
+    b.onclick = e => { e.stopPropagation(); openCardModal(b.dataset.editCard); });
+  // 담당자 순환 (미정 → psy → 루아파파 → 미정)
+  document.querySelectorAll("[data-owner-card]").forEach(b =>
+    b.onclick = e => { e.stopPropagation(); cycleOwner(b.dataset.ownerCard); });
+  // 락 토글
+  document.querySelectorAll("[data-lock-card]").forEach(b =>
+    b.onclick = e => { e.stopPropagation(); toggleLock(b.dataset.lockCard); });
+  // 칼럼별 카드 추가
+  document.querySelectorAll(".add-card").forEach(b =>
+    b.onclick = () => openCardModal(null, b.dataset.col));
+  // 마일스톤 항목 토글
+  document.querySelectorAll(".ms-items li").forEach(li =>
+    li.onclick = () => toggleMsItem(li.dataset.ms, +li.dataset.i));
+  // 결정 편집/추가
+  document.querySelectorAll("[data-edit-dec]").forEach(b =>
+    b.onclick = () => openDecModal(b.dataset.editDec));
+  const addDec = $("#btnAddDec"); if(addDec) addDec.onclick = () => openDecModal(null);
+
+  // 드래그&드롭
+  document.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("dragstart", e => {
+      dragId = card.dataset.card; card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    card.addEventListener("dragend", () => {
+      dragId = null;
+      document.querySelectorAll(".dragging,.insert-before,.dropline,.dragover")
+        .forEach(el => el.classList.remove("dragging","insert-before","dropline","dragover"));
+    });
+    card.addEventListener("dragover", e => {
+      e.preventDefault();
+      document.querySelectorAll(".insert-before").forEach(el => el.classList.remove("insert-before"));
+      if(card.dataset.card !== dragId) card.classList.add("insert-before");
+    });
+    card.addEventListener("drop", e => {
+      e.preventDefault(); e.stopPropagation();
+      moveCard(dragId, card.closest(".col-body").dataset.col, card.dataset.card);
+    });
+  });
+  document.querySelectorAll(".col-body").forEach(body => {
+    body.addEventListener("dragover", e => { e.preventDefault(); body.closest(".col").classList.add("dragover"); });
+    body.addEventListener("dragleave", () => body.closest(".col").classList.remove("dragover"));
+    body.addEventListener("drop", e => {
+      e.preventDefault();
+      if(e.target.closest(".card")) return; // 카드 위 드롭은 카드 핸들러가 처리
+      moveCard(dragId, body.dataset.col, null);
+    });
+  });
+}
+
+// ── 상태 변경 ───────────────────────────────────────────────────────────────
+function moveCard(id, toCol, beforeId){
+  if(!id) return;
+  const i = state.cards.findIndex(c => c.id === id);
+  if(i < 0) return;
+  const [card] = state.cards.splice(i, 1);
+  const changed = card.column !== toCol;
+  card.column = toCol;
+  card.updated = todayStr();
+  if(beforeId){
+    const ti = state.cards.findIndex(c => c.id === beforeId);
+    state.cards.splice(ti < 0 ? state.cards.length : ti, 0, card);
+  } else {
+    let last = -1; state.cards.forEach((c, idx) => { if(c.column === toCol) last = idx; });
+    state.cards.splice(last + 1, 0, card);
+  }
+  // 완료로 옮기면 락 자동 해제
+  if(toCol === "done") card.lock = false;
+  markDirty(); render();
+  if(changed) toast(`"${trunc(card.title)}" → ${colTitle(toCol)}`);
+}
+
+function cycleOwner(id){
+  const c = state.cards.find(x => x.id === id); if(!c) return;
+  const ids = ["", ...state.meta.members.map(m => m.id)];
+  c.owner = ids[(ids.indexOf(c.owner) + 1) % ids.length];
+  c.updated = todayStr(); markDirty(); render();
+}
+function toggleLock(id){
+  const c = state.cards.find(x => x.id === id); if(!c) return;
+  c.lock = !c.lock; c.updated = todayStr(); markDirty(); render();
+}
+function toggleMsItem(msId, idx){
+  const m = (state.milestones || []).find(x => x.id === msId); if(!m) return;
+  m.items[idx].done = !m.items[idx].done; markDirty(); render();
+}
+
+// ── 카드 모달 ───────────────────────────────────────────────────────────────
+function fillSelect(sel, opts){ sel.innerHTML = opts.map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join(""); }
+function openCardModal(id, presetCol){
+  editingCardId = id;
+  const c = id ? state.cards.find(x => x.id === id) : null;
+  $("#cardModalTitle").textContent = id ? "카드 편집" : "새 카드";
+  fillSelect($("#f-column"), state.columns.map(col => ({ v: col.id, t: col.title })));
+  fillSelect($("#f-owner"), [{ v:"", t:"담당 미정" }, ...state.meta.members.map(m => ({ v:m.id, t:m.name }))]);
+  $("#f-title").value = c ? c.title : "";
+  $("#f-desc").value = c ? (c.desc || "") : "";
+  $("#f-column").value = c ? c.column : (presetCol || "backlog");
+  $("#f-owner").value = c ? (c.owner || "") : "";
+  $("#f-prio").value = c ? (c.priority || "") : "";
+  $("#f-lock").value = c ? String(!!c.lock) : "false";
+  $("#f-area").value = c ? (c.area || "") : "";
+  $("#f-tags").value = c ? (c.tags || []).join(", ") : "";
+  $("#f-source").value = c ? (c.source || "") : "";
+  $("#f-delete").style.display = id ? "" : "none";
+  $("#cardModal").classList.add("on");
+  setTimeout(() => $("#f-title").focus(), 30);
+}
+function saveCardModal(){
+  const title = $("#f-title").value.trim();
+  if(!title){ toast("제목을 입력하세요"); return; }
+  const data = {
+    title,
+    desc: $("#f-desc").value.trim(),
+    column: $("#f-column").value,
+    owner: $("#f-owner").value,
+    priority: $("#f-prio").value,
+    lock: $("#f-lock").value === "true",
+    area: $("#f-area").value.trim(),
+    tags: $("#f-tags").value.split(",").map(s => s.trim()).filter(Boolean),
+    source: $("#f-source").value.trim(),
+    updated: todayStr()
+  };
+  if(editingCardId){
+    const c = state.cards.find(x => x.id === editingCardId);
+    Object.assign(c, data);
+  } else {
+    state.cards.push({ id: "c-" + Date.now().toString(36), ...data });
+  }
+  closeModals(); markDirty(); render();
+}
+function deleteCard(){
+  if(editingCardId && confirm("이 카드를 삭제할까요?")){
+    state.cards = state.cards.filter(c => c.id !== editingCardId);
+    closeModals(); markDirty(); render();
+  }
+}
+
+// ── 결정 모달 ───────────────────────────────────────────────────────────────
+function openDecModal(id){
+  editingDecId = id;
+  const d = id ? state.decisions.find(x => x.id === id) : null;
+  $("#decModalTitle").textContent = id ? "결정·논의 편집" : "새 결정·논의";
+  const ppl = [{ v:"", t:"미정" }, ...state.meta.members.map(m => ({ v:m.id, t:m.name }))];
+  fillSelect($("#d-asker"), ppl); fillSelect($("#d-waiting"), ppl);
+  $("#d-q").value = d ? d.q : "";
+  $("#d-asker").value = d ? (d.asker || "") : "";
+  $("#d-waiting").value = d ? (d.waiting || "") : "";
+  $("#d-status").value = d ? d.status : "open";
+  $("#d-date").value = d ? (d.date || "") : todayStr();
+  $("#d-note").value = d ? (d.note || "") : "";
+  $("#d-delete").style.display = id ? "" : "none";
+  $("#decModal").classList.add("on");
+  setTimeout(() => $("#d-q").focus(), 30);
+}
+function saveDecModal(){
+  const q = $("#d-q").value.trim();
+  if(!q){ toast("질문을 입력하세요"); return; }
+  const data = {
+    q, asker: $("#d-asker").value, waiting: $("#d-waiting").value,
+    status: $("#d-status").value, date: $("#d-date").value.trim(), note: $("#d-note").value.trim()
+  };
+  if(!state.decisions) state.decisions = [];
+  if(editingDecId){ Object.assign(state.decisions.find(x => x.id === editingDecId), data); }
+  else { state.decisions.unshift({ id: "dec-" + Date.now().toString(36), ...data }); }
+  closeModals(); markDirty(); render();
+}
+function deleteDec(){
+  if(editingDecId && confirm("이 항목을 삭제할까요?")){
+    state.decisions = state.decisions.filter(d => d.id !== editingDecId);
+    closeModals(); markDirty(); render();
+  }
+}
+function closeModals(){ $("#cardModal").classList.remove("on"); $("#decModal").classList.remove("on"); $("#cfgModal").classList.remove("on"); editingCardId = editingDecId = null; }
+
+// ── 저장/동기화 (File System Access + 폴백) ─────────────────────────────────
+function serialize(){
+  state.meta.updated = todayStr();
+  return FILE_HEADER + JSON.stringify(state, null, 2) + ";\n";
+}
+async function connectFile(){
+  try{
+    const [h] = await window.showOpenFilePicker({
+      types: [{ description: "Board data", accept: { "text/javascript": [".js"] } }]
+    });
+    fileHandle = h;
+    await reloadFile(true);
+    toast("✔ board-data.js 연결됨 — 이제 💾 저장으로 바로 기록");
+  }catch(e){ if(e.name !== "AbortError") toast("연결 취소/실패"); }
+}
+async function reloadFile(silent){
+  if(!fileHandle){ if(!silent) toast("먼저 📁 데이터 파일 연결"); return; }
+  if(dirty && !silent && !confirm("저장 안 된 변경이 있습니다. 파일 내용으로 덮어쓸까요?")) return;
+  try{
+    const txt = await (await fileHandle.getFile()).text();
+    const json = txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1);
+    state = JSON.parse(json);
+    clearDirty(); render();
+    if(!silent) toast("🔄 파일에서 다시 읽음");
+  }catch(e){ toast("읽기 실패: " + e.message); }
+}
+async function saveFile(){
+  if(apiMode){ await saveToApi(); return; }   // 라이브: GitHub에 커밋
+  if(window.showSaveFilePicker && fileHandle){
+    try{
+      const w = await fileHandle.createWritable();
+      await w.write(serialize()); await w.close();
+      clearDirty(); toast("💾 저장 완료 — 이제 git add/commit/push");
+      return;
+    }catch(e){ toast("저장 실패: " + e.message); return; }
+  }
+  if(window.showSaveFilePicker){ // 연결 안 된 상태 → 새 핸들로 저장
+    try{
+      fileHandle = await window.showSaveFilePicker({ suggestedName: FILE_NAME,
+        types: [{ description: "Board data", accept: { "text/javascript": [".js"] } }] });
+      const w = await fileHandle.createWritable();
+      await w.write(serialize()); await w.close();
+      clearDirty(); toast("💾 저장 완료 — board-data.js 덮어쓰기 확인 후 git push");
+      return;
+    }catch(e){ if(e.name !== "AbortError") toast("저장 실패: " + e.message); return; }
+  }
+  downloadFile(); // 최종 폴백
+}
+function downloadFile(){
+  const blob = new Blob([serialize()], { type: "text/javascript" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = FILE_NAME; a.click();
+  URL.revokeObjectURL(a.href);
+  clearDirty(); toast("⬇ board-data.js 내려받음 — 폴더의 파일을 덮어쓰고 git push");
+}
+async function copyFile(){
+  try{ await navigator.clipboard.writeText(serialize()); toast("📋 board-data.js 내용 복사됨"); }
+  catch(e){
+    const ta = document.createElement("textarea"); ta.value = serialize();
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+    toast("📋 복사됨");
+  }
+}
+
+// ── GitHub 라이브 모드 (API 직접 읽기/쓰기 + 폴링) ───────────────────────────
+function loadCfg(){
+  let c = {};
+  try{ c = JSON.parse(localStorage.getItem(LS_CFG) || "{}"); }catch(e){}
+  return Object.assign({ token:"", owner:"luapapa0613", repo:"project_2",
+    path:"planning/board/board-data.js", branch:"main", poll:true, pollSec:20 }, c);
+}
+function persistCfg(){ localStorage.setItem(LS_CFG, JSON.stringify(cfg)); }
+function apiHeaders(){ return { "Authorization":"Bearer "+cfg.token, "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28" }; }
+function contentsUrl(){ return `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURI(cfg.path)}`; }
+function getUrl(){ return contentsUrl() + "?ref=" + encodeURIComponent(cfg.branch || "main") + "&_=" + todayStr() + "-" + (remoteSha||"x"); }
+
+// UTF-8 안전 base64 (한글 보존)
+function b64encode(str){ const bytes = new TextEncoder().encode(str); let bin=""; for(const b of bytes) bin += String.fromCharCode(b); return btoa(bin); }
+function b64decode(b64){ const bin = atob(b64.replace(/\s/g,"")); const bytes = Uint8Array.from(bin, c=>c.charCodeAt(0)); return new TextDecoder().decode(bytes); }
+function parseBoardText(txt){ return JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}")+1)); }
+
+function updateConnChip(){
+  const chip = $("#connChip");
+  if(apiMode){
+    chip.className = "conn live";
+    chip.textContent = `🟢 라이브 · ${cfg.owner}/${cfg.repo}`;
+    $("#btnSave").textContent = "💾 저장→커밋";
+    $("#btnConnect").style.display = "none";   // 라이브에선 로컬 파일 연결 숨김(혼선 방지)
+  } else {
+    chip.className = "conn local";
+    chip.textContent = "⚪ 로컬";
+    $("#btnSave").textContent = (window.showSaveFilePicker || fileHandle) ? "💾 저장" : "💾 저장(내려받기)";
+    if(window.showOpenFilePicker) $("#btnConnect").style.display = "";
+  }
+}
+function connError(msg){
+  const chip = $("#connChip"); chip.className = "conn err"; chip.textContent = "🔴 " + msg.slice(0,36);
+  toast("⚠ " + msg);
+}
+
+async function loadFromApi(silent){
+  if(!apiMode) return;
+  try{
+    const res = await fetch(getUrl(), { headers: apiHeaders(), cache:"no-store" });
+    if(res.status === 404){ connError("데이터 파일 없음: " + cfg.path); if(!state) showSetupScreen("경로를 확인하세요: " + cfg.path); return; }
+    if(res.status === 401 || res.status === 403){ connError("토큰 인증 실패 (" + res.status + ") — ⚙에서 토큰 확인"); if(!state) showSetupScreen("토큰이 잘못됐거나 권한이 없습니다 (" + res.status + ")"); return; }
+    if(!res.ok){ connError("로드 실패 HTTP " + res.status); return; }
+    const j = await res.json();
+    remoteSha = j.sha;
+    state = parseBoardText(b64decode(j.content));
+    clearDirty(); updateConnChip(); render();
+    if(!silent) toast("🔄 GitHub에서 최신 반영");
+    startPoll();
+  }catch(e){ connError("네트워크 오류: " + e.message); if(!state) showSetupScreen("네트워크 오류: " + e.message); }
+}
+
+async function saveToApi(){
+  if(!apiMode) return;
+  try{
+    if(remoteSha === null){                         // sha 미확보 시 먼저 조회(충돌 감지용)
+      const r = await fetch(getUrl(), { headers: apiHeaders(), cache:"no-store" });
+      if(r.ok){ remoteSha = (await r.json()).sha; }
+    }
+    const body = { message:`board: web 편집 (${todayStr()})`, content:b64encode(serialize()), sha:remoteSha, branch:cfg.branch || "main" };
+    const res = await fetch(contentsUrl(), { method:"PUT", headers: apiHeaders(), body: JSON.stringify(body) });
+    if(res.status === 409 || res.status === 422){    // sha 불일치 = 상대가 먼저 저장함
+      toast("⚠ 상대가 먼저 저장했습니다 — 🔄로 동기화 후 다시 저장하세요(내 변경 보존됨)");
+      const chip = $("#connChip"); chip.className = "conn err"; chip.textContent = "🔴 원격 변경됨 · 🔄 필요";
+      return;
+    }
+    if(!res.ok){ const t = await res.text(); console.error(t); connError("저장 실패 HTTP " + res.status); return; }
+    const j = await res.json();
+    remoteSha = j.content.sha;
+    clearDirty(); updateConnChip();
+    toast("💾 저장→커밋 완료 — 상대에게 자동 반영됩니다");
+  }catch(e){ connError("저장 오류: " + e.message); }
+}
+
+function startPoll(){
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  if(!apiMode || !cfg.poll) return;
+  pollTimer = setInterval(pollCheck, Math.max(10, cfg.pollSec || 20) * 1000);
+}
+async function pollCheck(){
+  if(!apiMode) return;
+  try{
+    const res = await fetch(getUrl(), { headers: apiHeaders(), cache:"no-store" });
+    if(!res.ok) return;
+    const j = await res.json();
+    if(j.sha === remoteSha) return;                 // 변경 없음
+    if(dirty){                                       // 내 미저장 변경 있음 → 자동 덮어쓰기 금지
+      const chip = $("#connChip"); chip.className = "conn err"; chip.textContent = "🔴 상대 변경됨 · 저장 전 동기화";
+      toast("⚠ 상대가 보드를 변경했습니다 — 내 변경 저장 전 🔄로 맞추세요");
+      return;
+    }
+    remoteSha = j.sha;                               // 로컬 미변경 → 자동 반영
+    state = parseBoardText(b64decode(j.content));
+    clearDirty(); updateConnChip(); render();
+    toast("🔄 상대 변경 자동 반영됨");
+  }catch(e){}
+}
+
+// 설정 모달
+function openCfg(){
+  $("#g-token").value = cfg.token || "";
+  $("#g-owner").value = cfg.owner; $("#g-repo").value = cfg.repo;
+  $("#g-path").value = cfg.path;   $("#g-branch").value = cfg.branch;
+  $("#g-poll").checked = !!cfg.poll;
+  $("#cfgModal").classList.add("on");
+  setTimeout(() => $("#g-token").focus(), 30);
+}
+function saveCfgModal(){
+  cfg.token = $("#g-token").value.trim();
+  cfg.owner = $("#g-owner").value.trim(); cfg.repo = $("#g-repo").value.trim();
+  cfg.path = $("#g-path").value.trim();   cfg.branch = $("#g-branch").value.trim() || "main";
+  cfg.poll = $("#g-poll").checked;
+  persistCfg();
+  apiMode = !!(cfg.token && cfg.owner && cfg.repo && cfg.path);
+  remoteSha = null;
+  closeModals(); updateConnChip();
+  if(apiMode) loadFromApi(false);
+  else { if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } toast("로컬 모드로 전환"); }
+}
+function clearCfg(){
+  cfg.token = ""; persistCfg(); apiMode = false; remoteSha = null;
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  closeModals(); updateConnChip(); toast("연결 끊김 — 로컬 모드");
+}
+
+// ── dirty 상태 ──────────────────────────────────────────────────────────────
+function markDirty(){ dirty = true; $("#dirty").classList.add("on"); $("#savedTag").classList.remove("on"); }
+function clearDirty(){ dirty = false; $("#dirty").classList.remove("on"); $("#savedTag").classList.add("on"); setTimeout(() => $("#savedTag").classList.remove("on"), 2500); }
+
+// ── 유틸 ───────────────────────────────────────────────────────────────────
+function todayStr(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function colTitle(id){ const c = state.columns.find(x => x.id === id); return c ? c.title : id; }
+function trunc(s, n=22){ return s.length > n ? s.slice(0, n) + "…" : s; }
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2400); }
+
+// ── 전역 UI 배선 (1회) ──────────────────────────────────────────────────────
+function bindUI(){
+  $("#btnSave").onclick = saveFile;
+  $("#btnSettings").onclick = openCfg;
+  $("#btnConnect").onclick = connectFile;
+  $("#btnReload").onclick = () => apiMode ? loadFromApi(false) : reloadFile(false);
+  $("#btnDownload").onclick = downloadFile;
+  $("#btnCopy").onclick = copyFile;
+  $("#g-save").onclick = saveCfgModal;
+  $("#g-cancel").onclick = closeModals;
+  $("#g-clear").onclick = clearCfg;
+  $("#btnAddCard").onclick = () => openCardModal(null, "backlog");
+  $("#f-ok").onclick = saveCardModal;
+  $("#f-cancel").onclick = closeModals;
+  $("#f-delete").onclick = deleteCard;
+  $("#d-ok").onclick = saveDecModal;
+  $("#d-cancel").onclick = closeModals;
+  $("#d-delete").onclick = deleteDec;
+  document.querySelectorAll("#ownerFilter button").forEach(b =>
+    b.onclick = () => { document.querySelectorAll("#ownerFilter button").forEach(x => x.classList.remove("on")); b.classList.add("on"); filterOwner = b.dataset.o; render(); });
+  $("#search").oninput = e => { searchText = e.target.value.trim().toLowerCase(); render(); };
+  document.querySelectorAll(".modal-bg").forEach(bg =>
+    bg.onclick = e => { if(e.target === bg) closeModals(); });
+  document.addEventListener("keydown", e => {
+    if((e.ctrlKey || e.metaKey) && e.key === "s"){ e.preventDefault(); saveFile(); }
+    if(e.key === "Escape") closeModals();
+  });
+  window.addEventListener("beforeunload", e => { if(dirty){ e.preventDefault(); e.returnValue = ""; } });
+}
+
+boot();
+</script>
+</body>
+</html>
